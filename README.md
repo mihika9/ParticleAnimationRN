@@ -1,19 +1,23 @@
-# @babel/compat-data
+# @react-native/asset-utils
 
-> The compat-data to determine required Babel plugins
+[![npm]](https://www.npmjs.com/package/@react-native/asset-utils) [![npm downloads]](https://www.npmjs.com/package/@react-native/asset-utils)
 
-See our website [@babel/compat-data](https://babeljs.io/docs/babel-compat-data) for more information.
+[npm]: https://img.shields.io/npm/v/@react-native/asset-utils.svg?color=blue
+[npm downloads]: https://img.shields.io/npm/dm/@react-native/asset-utils.svg
 
-## Install
+Android resource-path helpers used when copying React Native assets into `drawable-*` / `raw` folders. Consumed by bundling and build tooling; most apps never import this directly.
 
-Using npm:
+## API
 
-```sh
-npm install --save @babel/compat-data
+```js
+import {
+  getAndroidResourceFolderName,
+  getAndroidResourceIdentifier,
+} from '@react-native/asset-utils';
 ```
 
-or using yarn:
-
-```sh
-yarn add @babel/compat-data
-```
+| Export | Signature | Notes |
+|---|---|---|
+| `getAndroidResourceFolderName` | `(asset: PackagerAsset, scale: number) => string` | e.g. `drawable-xhdpi`; non-drawable types resolve to `raw` |
+| `getAndroidResourceIdentifier` | `(asset: PackagerAsset) => string` | Sanitised resource name |
+| `drawableFileTypes` | `Set<string>` | Asset types that map to a `drawable-*` folder |
