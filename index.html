@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapbox Wind Particle Animation Proof of Concept</title>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      background-color: #0b0e14;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .control-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+      padding: 20px;
+      width: 320px;
+      color: #f8fafc;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #38bdf8;
+    }
+    .panel-subtitle {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+    .control-group {
+      margin-bottom: 14px;
+    }
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #e2e8f0;
+    }
+    .value-badge {
+      font-family: monospace;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #334155;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+    }
+    .badge-status {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="map"></div>
+  <canvas id="canvas-container"></canvas>
+
+  <div class="control-panel">
+    <div class="panel-title">
+      <span class="badge-status"></span> Mapbox Wind Particle Simulation
+    </div>
+    <div class="panel-subtitle">Interactive GFS Wind Particle Renderer</div>
+
+    <div class="control-group">
+      <div class="label-row">
+        <span>Particle Count</span>
+        <span id="val-particles" class="value-badge">2048</span>
+      </div>
+      <input type="range" id="slider-particles" min="512" max="8192" step="256" value="2048" />
+    </div>
+
+    <div class="control-group">
+      <div class="label-row">
+        <span>Speed Factor</span>
+        <span id="val-speed" class="value-badge">0.4</span>
+      </div>
+      <input type="range" id="slider-speed" min="0.1" max="1.5" step="0.05" value="0.4" />
+    </div>
+
+    <div class="control-group">
+      <div class="label-row">
+        <span>Fade Opacity</span>
+        <span id="val-fade" class="value-badge">0.90</span>
+      </div>
+      <input type="range" id="slider-fade" min="0.5" max="0.98" step="0.01" value="0.90" />
+    </div>
+
+    <div class="control-group">
+      <div class="label-row">
+        <span>Reset Rate</span>
+        <span id="val-reset" class="value-badge">0.02</span>
+      </div>
+      <input type="range" id="slider-reset" min="0.005" max="0.08" step="0.005" value="0.02" />
+    </div>
+  </div>
+
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoibWloaWthMDkiLCJhIjoiY21zeDRnM3ZuMDJpNjMwb2hvZ2tnbDc3aSJ9.dkzWOqwmGdHxKBOlaQENng';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [-98.5795, 39.8283],
+      zoom: 3.5,
+      pitch: 0
+    });
+
+    const canvas = document.getElementById('canvas-container');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Simulation Parameters
+    let numParticles = 2048;
+    let speedFactor = 0.4;
+    let fadeOpacity = 0.90;
+    let resetRate = 0.02;
+
+    // Particle state
+    let particles = [];
+
+    function getColorForSpeed(speed) {
+      // Color gradient mapping: 0 -> Cyan/Alpha, low -> Cyan, med -> Yellow, high -> Red
+      const normalized = Math.min(speed / 12, 1.0);
+      if (normalized < 0.25) {
+        const t = normalized / 0.25;
+        return `rgba(56, 189, 248, ${0.4 + t * 0.4})`; // Cyan
+      } else if (normalized < 0.6) {
+        const t = (normalized - 0.25) / 0.35;
+        return `rgba(${Math.floor(56 + t * 199)}, ${Math.floor(189 + t * 36)}, 56, 0.95)`; // Yellow-Green
+      } else {
+        const t = (normalized - 0.6) / 0.4;
+        return `rgba(239, 68, ${Math.floor(68 * (1 - t))}, 1.0)`; // Bright Red
+      }
+    }
+
+    // Mathematical wind field synthesis (simulating global trade winds + jet streams)
+    function getWindVector(lng, lat) {
+      const latRad = lat * Math.PI / 180;
+      const lngRad = lng * Math.PI / 180;
+
+      // Zonal trade winds and jet stream patterns
+      let u = 8 * Math.cos(latRad * 2.5) + 5 * Math.sin(lngRad * 2);
+      let v = 5 * Math.sin(latRad * 3) + 3 * Math.cos(lngRad * 1.5);
+
+      // Add atmospheric vortex turbulence
+      const dist1 = Math.hypot(lng - (-95), lat - 35);
+      u += -12 * (lat - 35) / (dist1 + 2);
+      v += 12 * (lng - (-95)) / (dist1 + 2);
+
+      const speed = Math.hypot(u, v);
+      return { u, v, speed };
+    }
+
+    function resetParticle(p) {
+      const bounds = map.getBounds();
+      p.lng = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest());
+      p.lat = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth());
+      p.age = 0;
+      p.maxAge = Math.floor(60 + Math.random() * 120);
+    }
+
+    function initParticles() {
+      particles = [];
+      for (let i = 0; i < numParticles; i++) {
+        const p = {};
+        resetParticle(p);
+        particles.push(p);
+      }
+    }
+
+    map.on('load', () => {
+      initParticles();
+      animate();
+    });
+
+    function animate() {
+      // Apply trail fade opacity
+      ctx.fillStyle = `rgba(11, 14, 20, ${1.0 - fadeOpacity})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.age++;
+
+        if (p.age > p.maxAge || Math.random() < resetRate) {
+          resetParticle(p);
+          continue;
+        }
+
+        const currentPos = map.project([p.lng, p.lat]);
+
+        // Screen boundary check
+        if (currentPos.x < 0 || currentPos.x > canvas.width || currentPos.y < 0 || currentPos.y > canvas.height) {
+          resetParticle(p);
+          continue;
+        }
+
+        const wind = getWindVector(p.lng, p.lat);
+
+        // Move particle geographically
+        const deltaLng = (wind.u * 0.04 * speedFactor);
+        const deltaLat = (wind.v * 0.04 * speedFactor);
+
+        p.lng += deltaLng;
+        p.lat += deltaLat;
+
+        const nextPos = map.project([p.lng, p.lat]);
+
+        // Draw particle motion vector
+        ctx.beginPath();
+        ctx.strokeStyle = getColorForSpeed(wind.speed);
+        ctx.moveTo(currentPos.x, currentPos.y);
+        ctx.lineTo(nextPos.x, nextPos.y);
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    // Connect Sliders
+    document.getElementById('slider-particles').addEventListener('input', (e) => {
+      numParticles = parseInt(e.target.value);
+      document.getElementById('val-particles').textContent = numParticles;
+      initParticles();
+    });
+
+    document.getElementById('slider-speed').addEventListener('input', (e) => {
+      speedFactor = parseFloat(e.target.value);
+      document.getElementById('val-speed').textContent = speedFactor.toFixed(2);
+    });
+
+    document.getElementById('slider-fade').addEventListener('input', (e) => {
+      fadeOpacity = parseFloat(e.target.value);
+      document.getElementById('val-fade').textContent = fadeOpacity.toFixed(2);
+    });
+
+    document.getElementById('slider-reset').addEventListener('input', (e) => {
+      resetRate = parseFloat(e.target.value);
+      document.getElementById('val-reset').textContent = resetRate.toFixed(3);
+    });
+  </script>
+</body>
+</html>
