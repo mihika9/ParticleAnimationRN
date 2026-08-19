@@ -1,71 +1,36 @@
-# Mapbox Particle Animation PoC
+# Android Mapbox Particle Implementation
 
-This project is a Proof of Concept (PoC) demonstrating how to implement Mapbox's `RasterParticleLayer` natively in SwiftUI and integrate it seamlessly into a React Native application.
+## Current Status
+Android support is currently **not included** in this initial phase of `particle-animation-rn`. The current implementation prioritizes iOS Mapbox v11 `RasterParticleLayer` rendering via SwiftUI and Fabric bindings.
 
-## Requirements
+## Platform Separation & Future Android Roadmap
+When Android support is added, it will live inside this directory (`android/`).
 
-* **React Native:** 0.87.0
-* **Mapbox Maps SDK for iOS:** ~> 11.9.2
-* **iOS Target:** iOS 14.0+
-* **Swift:** 5.9+
+### Proposed Architecture for Android:
+1. **Mapbox Android Maps SDK v11 Dependency**:
+   Include `com.mapbox.maps:android:11.x.x` in `android/build.gradle`.
+2. **Android ViewManager**:
+   Create `MapboxParticleViewManager.kt` extending `SimpleViewManager<MapboxParticleView>` or `ViewGroupManager<MapView>`.
+3. **Mapbox Raster Particle Layer Setup**:
+   ```kotlin
+   val mapboxMap = mapView.mapboxMap
+   mapboxMap.loadStyle(Style.STANDARD) { style ->
+       val source = rasterArraySource("wind-source") {
+           url("mapbox://mapbox.gfs-winds")
+       }
+       style.addSource(source)
 
-## Mapbox Token Setup
-
-To run this application, you **must** have a valid Mapbox Public Access Token and a Mapbox Secret Access Token (with `Downloads:Read` scope).
-
-1. **Configure `.netrc` for SDK Download:**
-   Create a `~/.netrc` file in your home directory to allow CocoaPods to download the Mapbox SDK.
+       val layer = rasterParticleLayer("particles", "wind-source") {
+           sourceLayer("10winds")
+           rasterParticleCount(particleCount)
+           rasterParticleSpeedFactor(particleSpeed)
+           rasterParticleFadeOpacityFactor(fadeOpacity)
+           rasterParticleResetRateFactor(resetRate)
+       }
+       style.addLayer(layer)
+   }
    ```
-   machine api.mapbox.com
-     login mapbox
-     password <YOUR_MAPBOX_SECRET_TOKEN>
-   ```
+4. **React Native Package Export**:
+   Expose `MapboxParticlePackage` implementing `ReactPackage` and register `MapboxParticleViewManager`.
 
-2. **Configure Mapbox Public Token in the App:**
-   Add your Mapbox Public Access Token to your `ios/ParticleAnimationRN/Info.plist`:
-   ```xml
-   <key>MBXAccessToken</key>
-   <string>YOUR_MAPBOX_PUBLIC_TOKEN</string>
-   ```
-
-## Installation and Build Steps
-
-1. **Install Node Dependencies:**
-   ```bash
-   npm install
-   ```
-
-2. **Install iOS Dependencies:**
-   ```bash
-   cd ios
-   pod install
-   cd ..
-   ```
-
-3. **Run the App:**
-   ```bash
-   npx react-native run-ios
-   ```
-
-## Project Structure
-
-```
-ParticleAnimationRN/
-│
-├── App.tsx                     // React Native entry point, renders MapboxParticleView
-├── MapboxParticleView.tsx      // RN Bridge Component mapping to the native ViewManager
-│
-├── ios/
-│   ├── Podfile                 // Configured to pull MapboxMaps ~> 11.9.2
-│   └── ParticleAnimationRN/
-│       ├── MapboxParticleView.swift          // Native SwiftUI component using Mapbox
-│       ├── MapboxParticleRNView.swift        // UIView wrapper for the UIHostingController
-│       ├── MapboxParticleViewManager.swift   // Swift ViewManager exposing it to RN
-│       └── MapboxParticleViewManager.m       // Obj-C RCTViewManager export
-```
-
-## Troubleshooting
-
-* **Mapbox SDK fails to install:** Ensure your `~/.netrc` file is correctly configured with the secret token, not the public token.
-* **Map doesn't load or shows white screen:** Ensure your `MBXAccessToken` is present in `Info.plist` and the token has the necessary scopes.
-* **Build errors regarding experimental API:** `RasterParticleLayer` is marked as experimental (`@_spi(Experimental)`). Ensure you are importing MapboxMaps correctly with the SPI attribute.
+For now, when running on Android, the React Native component gracefully renders a fallback container view without throwing runtime crashes.
